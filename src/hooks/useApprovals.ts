@@ -28,21 +28,39 @@ export interface ApprovalRow {
   updated_at: string;
 }
 
-export function useApprovals(status: "pending" | "all" = "pending", batchId?: string | null) {
+export interface ApprovalFilters {
+  page?: number; // 1-based
+  pageSize?: number;
+  statusFilter?: string; // "all" | status value
+  from?: string; // yyyy-mm-dd
+  to?: string; // yyyy-mm-dd
+}
+
+export function useApprovals(
+  status: "pending" | "all" = "pending",
+  batchId?: string | null,
+  filters: ApprovalFilters = {},
+) {
   const qc = useQueryClient();
+  const { page = 1, pageSize = 50, statusFilter = "all", from, to } = filters;
   const query = useQuery({
-    queryKey: ["approvals", status, batchId || null],
+    queryKey: ["approvals", status, batchId || null, page, pageSize, statusFilter, from || null, to || null],
+    placeholderData: (prev) => prev,
     queryFn: async () => {
+      const start = (page - 1) * pageSize;
       let q = supabase
         .from("approval_requests")
-        .select("*, leads(id, name, email, company_name, lead_list_id), cadences(id, name)")
+        .select("*, leads(id, name, email, company_name, lead_list_id), cadences(id, name)", { count: "exact" })
         .order("created_at", { ascending: false })
-        .limit(500);
+        .range(start, start + pageSize - 1);
       if (status === "pending") q = q.eq("status", "pending");
+      else if (statusFilter !== "all") q = q.eq("status", statusFilter as any);
       if (batchId) q = q.eq("batch_id", batchId);
-      const { data, error } = await q;
+      if (from) q = q.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
+      if (to) q = q.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
+      const { data, error, count } = await q;
       if (error) throw error;
-      return data as any[];
+      return { rows: (data || []) as any[], total: count ?? 0 };
     },
   });
 
