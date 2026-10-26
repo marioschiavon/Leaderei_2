@@ -136,8 +136,7 @@ export default function ApprovalsPage() {
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="pending">Pendentes</SelectItem>
+                <SelectItem value="all">Todos os processados</SelectItem>
                 <SelectItem value="approved">Aprovadas</SelectItem>
                 <SelectItem value="edited_sent">Editadas e enviadas</SelectItem>
                 <SelectItem value="rejected">Rejeitadas</SelectItem>
