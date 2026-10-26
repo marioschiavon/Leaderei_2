@@ -129,7 +129,7 @@ async function syncHistory(
   if (fresh.length) patch.activities_synced_at = fresh[fresh.length - 1].sent_at;
 
   const { data: bk } = await supabase.from("bookings").select("id, scheduled_at, duration_minutes, title, meeting_url")
-    .eq("lead_id", leadId).in("status", ["accepted", "pending", "confirmed"] as any).not("scheduled_at", "is", null)
+    .eq("lead_id", leadId).in("status", ["pending", "confirmed", "rescheduled"]).not("scheduled_at", "is", null)
     .order("created_at", { ascending: false }).limit(1);
   const booking = bk?.[0] as any;
   if (booking && booking.id !== deal.meeting_booking_id) {
