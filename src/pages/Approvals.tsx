@@ -13,7 +13,9 @@ import { Inbox, CheckCircle2, XCircle, Loader2, AlertCircle, Mail, MessageSquare
 import { useApprovals, useApprovalExecute, useBulkApprovalExecute, type ApprovalRow } from "@/hooks/useApprovals";
 import { WhatsAppQueueBadge } from "@/components/WhatsAppQueueBadge";
 import { useLeadLists } from "@/hooks/useLeadLists";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { TablePagination } from "@/components/TablePagination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ptBR } from "date-fns/locale";
 
 
@@ -36,7 +38,22 @@ export default function ApprovalsPage() {
   const [params, setParams] = useSearchParams();
   const batchId = params.get("batch");
   const [tab, setTab] = useState<"pending" | "all">("pending");
-  const { data: approvals = [], isLoading } = useApprovals(tab, batchId);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  useEffect(() => { setPage(1); }, [tab, batchId, statusFilter, from, to, pageSize]);
+  const { data, isLoading } = useApprovals(tab, batchId, { page, pageSize, statusFilter, from, to });
+  const approvals = data?.rows ?? [];
+  const total = data?.total ?? 0;
+  const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+  const setRange = (days: number | "month" | null) => {
+    const now = new Date();
+    if (days === null) { setFrom(""); setTo(""); return; }
+    if (days === "month") { setFrom(fmt(new Date(now.getFullYear(), now.getMonth(), 1))); setTo(fmt(now)); return; }
+    setFrom(fmt(new Date(now.getTime() - (days - 1) * 86400000))); setTo(fmt(now));
+  };
   const { data: lists = [] } = useLeadLists();
   const activeList = useMemo(() => lists.find((l) => l.id === batchId), [lists, batchId]);
   const execute = useApprovalExecute();
