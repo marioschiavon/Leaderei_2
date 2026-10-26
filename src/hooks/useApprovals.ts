@@ -54,7 +54,8 @@ export function useApprovals(
         .order("created_at", { ascending: false })
         .range(start, start + pageSize - 1);
       if (status === "pending") q = q.eq("status", "pending");
-      else if (statusFilter !== "all") q = q.eq("status", statusFilter as any);
+      else if (statusFilter !== "all" && statusFilter !== "pending") q = q.eq("status", statusFilter as any);
+      else q = q.not("status", "in", "(pending,queued)");
       if (batchId) q = q.eq("batch_id", batchId);
       if (from) q = q.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
       if (to) q = q.lte("created_at", new Date(`${to}T23:59:59.999`).toISOString());
