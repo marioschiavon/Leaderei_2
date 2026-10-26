@@ -105,3 +105,88 @@ export function createPipedriveClient(apiToken: string): PipedriveClient {
     put: (p, b) => call("PUT", p, {}, b),
   };
 }
+
+// ---------- Atividades e resumo para o cliente final ----------
+// Texto que sai para o CRM do cliente: canal sempre "WhatsApp" ou "E-mail".
+
+export interface SyncMessage {
+  direction: string;
+  channel: string;
+  content?: string | null;
+  sent_at: string;
+}
+
+export function channelLabel(channel: string): "WhatsApp" | "E-mail" {
+  return channel === "whatsapp" ? "WhatsApp" : "E-mail";
+}
+
+export interface ActivityDraft {
+  subject: string;
+  type: "email" | "task";
+  note: string;
+  due: string; // ISO do último envio do grupo
+}
+
+/** Agrupa mensagens novas em uma atividade concluída por canal e sentido (economiza chamadas). */
+export function buildActivityDrafts(msgs: SyncMessage[]): ActivityDraft[] {
+  const groups = new Map<string, SyncMessage[]>();
+  for (const m of msgs) {
+    const k = `${channelLabel(m.channel)}|${m.direction === "inbound" ? "in" : "out"}`;
+    groups.set(k, [...(groups.get(k) ?? []), m]);
+  }
+  const out: ActivityDraft[] = [];
+  for (const [k, list] of groups) {
+    const [label, dir] = k.split("|") as ["WhatsApp" | "E-mail", "in" | "out"];
+    const n = list.length;
+    const subject = dir === "in"
+      ? `${label}: resposta do lead${n > 1 ? ` (${n} mensagens)` : ""}`
+      : `${label}: ${n > 1 ? `${n} mensagens enviadas` : "mensagem enviada"} pela Leaderei`;
+    const last = list[list.length - 1];
+    const snippet = String(last.content ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+    out.push({
+      subject,
+      type: label === "E-mail" ? "email" : "task",
+      note: snippet ? `Última mensagem: "${snippet}"` : "",
+      due: last.sent_at,
+    });
+  }
+  return out;
+}
+
+export function countTouches(msgs: SyncMessage[]) {
+  const c = { whatsapp_out: 0, whatsapp_in: 0, email_out: 0, email_in: 0 };
+  for (const m of msgs) {
+    const ch = m.channel === "whatsapp" ? "whatsapp" : "email";
+    const d = m.direction === "inbound" ? "in" : "out";
+    c[`${ch}_${d}` as keyof typeof c]++;
+  }
+  return c;
+}
+
+export function buildSummaryNote(opts: {
+  msgs: SyncMessage[];
+  summary: string;
+  leadId: string;
+  meetingAt?: string | null;
+  appUrl?: string;
+}): string {
+  const c = countTouches(opts.msgs);
+  const firstOut = opts.msgs.find((m) => m.direction !== "inbound");
+  const firstIn = opts.msgs.find((m) => m.direction === "inbound");
+  let response = "";
+  if (firstOut && firstIn && firstIn.sent_at > firstOut.sent_at) {
+    const h = (new Date(firstIn.sent_at).getTime() - new Date(firstOut.sent_at).getTime()) / 3_600_000;
+    response = h < 24 ? `${Math.max(1, Math.round(h))}h` : `${Math.round(h / 24)} dia(s)`;
+  }
+  const fmt = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+  const url = `${opts.appUrl ?? "https://app.leaderei.com.br"}/conversations?lead=${opts.leadId}`;
+  return [
+    "<b>Resumo Leaderei</b>",
+    `WhatsApp: ${c.whatsapp_out} enviadas / ${c.whatsapp_in} recebidas`,
+    `E-mail: ${c.email_out} enviados / ${c.email_in} recebidos`,
+    response ? `Tempo até a primeira resposta: ${response}` : null,
+    opts.meetingAt ? `Reunião: ${fmt(opts.meetingAt)}` : null,
+    opts.summary ? `<br><b>Resumo da conversa</b><br>${opts.summary.replace(/\n/g, "<br>")}` : null,
+    `<br><a href="${url}">Ver conversa completa na Leaderei</a>`,
+  ].filter(Boolean).join("<br>");
+}

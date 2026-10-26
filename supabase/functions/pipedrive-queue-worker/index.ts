@@ -1,7 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
   STAGE_RANK,
+  buildActivityDrafts,
   buildEntityFields,
+  buildSummaryNote,
+  type SyncMessage,
   configIsReady,
   createPipedriveClient,
   shouldAdvance,
@@ -93,6 +96,69 @@ async function conversationSummary(supabase: ReturnType<typeof createClient>, le
     .join("\n").slice(0, 4000);
 }
 
+const dueParts = (iso: string) => {
+  const d = new Date(iso);
+  return { due_date: d.toISOString().slice(0, 10), due_time: d.toISOString().slice(11, 16) };
+};
+
+/** Registra no negócio as atividades novas, a reunião e (se final) o resumo fixado. */
+async function syncHistory(
+  supabase: ReturnType<typeof createClient>,
+  pd: PipedriveClient,
+  deal: Record<string, any>,
+  leadId: string,
+  ownerId: number | null,
+  final: boolean,
+) {
+  const { data: convs } = await supabase.from("conversations").select("id").eq("lead_id", leadId);
+  const ids = (convs ?? []).map((c: any) => c.id);
+  const msgs: SyncMessage[] = ids.length
+    ? ((await supabase.from("messages").select("direction, channel, content, sent_at")
+      .in("conversation_id", ids).order("sent_at", { ascending: true }).limit(1000)).data ?? []) as SyncMessage[]
+    : [];
+  const since = deal.activities_synced_at ? String(deal.activities_synced_at) : null;
+  const fresh = since ? msgs.filter((m) => new Date(m.sent_at) > new Date(since)) : msgs;
+  const base: Record<string, unknown> = { deal_id: Number(deal.deal_id) };
+  if (deal.person_id) base.person_id = Number(deal.person_id);
+  if (ownerId) base.user_id = ownerId;
+  const patch: Record<string, unknown> = {};
+
+  for (const a of buildActivityDrafts(fresh)) {
+    await pd.post("/activities", { ...base, subject: a.subject, type: a.type, note: a.note, done: 1, ...dueParts(a.due) });
+  }
+  if (fresh.length) patch.activities_synced_at = fresh[fresh.length - 1].sent_at;
+
+  const { data: bk } = await supabase.from("bookings").select("id, scheduled_at, duration_minutes, title, meeting_url")
+    .eq("lead_id", leadId).in("status", ["pending", "confirmed", "rescheduled"]).not("scheduled_at", "is", null)
+    .order("created_at", { ascending: false }).limit(1);
+  const booking = bk?.[0] as any;
+  if (booking && booking.id !== deal.meeting_booking_id) {
+    const act = await pd.post<any>("/activities", {
+      ...base, type: "meeting", done: 0,
+      subject: booking.title || "Reunião agendada pela Leaderei",
+      duration: `${String(Math.floor((booking.duration_minutes ?? 30) / 60)).padStart(2, "0")}:${String((booking.duration_minutes ?? 30) % 60).padStart(2, "0")}`,
+      note: booking.meeting_url ? `Link: ${booking.meeting_url}` : "",
+      ...dueParts(booking.scheduled_at),
+    });
+    patch.meeting_activity_id = act?.id ? Number(act.id) : null;
+    patch.meeting_booking_id = booking.id;
+  }
+
+  if (final) {
+    const summary = await conversationSummary(supabase, leadId);
+    const content = buildSummaryNote({ msgs, summary, leadId, meetingAt: booking?.scheduled_at ?? null });
+    let noteId = deal.summary_note_id ? Number(deal.summary_note_id) : null;
+    if (noteId) {
+      try { await pd.put(`/notes/${noteId}`, { content, pinned_to_deal_flag: 1 }); } catch { noteId = null; }
+    }
+    if (!noteId) {
+      const n = await pd.post<any>("/notes", { deal_id: Number(deal.deal_id), content, pinned_to_deal_flag: 1 });
+      patch.summary_note_id = n?.id ? Number(n.id) : null;
+    }
+  }
+  if (Object.keys(patch).length) await supabase.from("pipedrive_deals").update(patch).eq("id", deal.id);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const url = Deno.env.get("SUPABASE_URL");
@@ -164,15 +230,15 @@ Deno.serve(async (req) => {
         if (orgId) body.org_id = orgId;
         if (ownerId) body.user_id = ownerId;
         const created = await pd.post<any>("/deals", body);
-        await supabase.from("pipedrive_deals").insert({
+        const { data: newDeal } = await supabase.from("pipedrive_deals").insert({
           company_id: job.company_id, lead_id: job.lead_id, deal_id: Number(created.id),
           person_id: personId, org_id: orgId, current_stage: String(cfg.stage_created),
           stage_rank: STAGE_RANK.create_deal,
-        });
+        }).select("*").single();
         if (personId && !lead.pipedrive_id) {
           await supabase.from("leads").update({ pipedrive_id: personId }).eq("id", lead.id).is("pipedrive_id", null);
         }
-        await pd.post("/notes", { deal_id: Number(created.id), content: "Negócio criado pela Leaderei: o lead recebeu a primeira abordagem." }).catch(() => null);
+        if (newDeal) await syncHistory(supabase, pd, newDeal, job.lead_id, ownerId, false).catch(() => null);
         await setJob(job.id, { status: "done", last_error: null });
         results.push({ id: job.id, status: "done", deal_id: created.id });
         continue;
@@ -195,6 +261,7 @@ Deno.serve(async (req) => {
         continue;
       }
       if (!shouldAdvance(deal.stage_rank, job.event)) {
+        await syncHistory(supabase, pd, deal, job.lead_id, ownerId, job.event !== "stage_replied").catch(() => null);
         await setJob(job.id, { status: "done", last_error: null });
         continue;
       }
@@ -202,18 +269,11 @@ Deno.serve(async (req) => {
         stage_id: Number(target),
         ...buildEntityFields(lead as Record<string, unknown>, cfg.field_map, "deal"),
       });
-      const notes: Record<string, string> = {
-        stage_replied: "O lead respondeu à abordagem da Leaderei.",
-        stage_meeting: "Reunião agendada pela Leaderei.",
-      };
-      let note = notes[job.event] ?? "";
       if (job.event === "move_stage") {
-        const summary = await conversationSummary(supabase, job.lead_id);
         const reason = (job.payload as any)?.reason ?? null;
-        note = ["Atendimento transferido para humano pela Leaderei.", reason ? `Motivo: ${reason}` : null,
-          summary ? `\nResumo da conversa:\n${summary}` : null].filter(Boolean).join("\n");
+        await pd.post("/notes", { deal_id: Number(deal.deal_id), content: `Atendimento transferido para humano pela Leaderei.${reason ? `<br>Motivo: ${reason}` : ""}` }).catch(() => null);
       }
-      if (note) await pd.post("/notes", { deal_id: Number(deal.deal_id), content: note.replace(/\n/g, "<br>") }).catch(() => null);
+      await syncHistory(supabase, pd, deal, job.lead_id, ownerId, job.event !== "stage_replied");
       await supabase.from("pipedrive_deals").update({ current_stage: target, stage_rank: STAGE_RANK[job.event as keyof typeof STAGE_RANK] }).eq("id", deal.id);
       await setJob(job.id, { status: "done", last_error: null });
       results.push({ id: job.id, status: "done", moved: target });
