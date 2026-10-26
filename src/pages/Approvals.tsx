@@ -129,6 +129,40 @@ export default function ApprovalsPage() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-end gap-3 rounded-md border p-3">
+        {tab === "all" && (
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="pending">Pendentes</SelectItem>
+                <SelectItem value="approved">Aprovadas</SelectItem>
+                <SelectItem value="edited_sent">Editadas e enviadas</SelectItem>
+                <SelectItem value="rejected">Rejeitadas</SelectItem>
+                <SelectItem value="failed">Falhas de envio</SelectItem>
+                <SelectItem value="expired">Expiradas</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label className="text-xs">De</Label>
+          <Input type="date" className="h-9 w-[160px]" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Até</Label>
+          <Input type="date" className="h-9 w-[160px]" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => setRange(7)}>Últimos 7 dias</Button>
+          <Button size="sm" variant="outline" onClick={() => setRange(30)}>Últimos 30 dias</Button>
+          <Button size="sm" variant="outline" onClick={() => setRange("month")}>Este mês</Button>
+          <Button size="sm" variant="ghost" onClick={() => setRange(null)}>Todo o período</Button>
+        </div>
+      </div>
+
       {tab === "pending" && pendingIds.length > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 p-2 px-3">
           <div className="flex items-center gap-2">
@@ -180,7 +214,7 @@ export default function ApprovalsPage() {
         <Card className="overflow-hidden">
           <CardHeader className="py-3">
             <CardTitle className="text-sm">
-              {tab === "pending" ? "Fila" : "Todos"} ({approvals.length})
+              {tab === "pending" ? "Fila" : "Histórico"} ({total.toLocaleString("pt-BR")})
             </CardTitle>
           </CardHeader>
           <ScrollArea className="h-[calc(100vh-340px)]">
@@ -243,6 +277,14 @@ export default function ApprovalsPage() {
               })}
             </div>
           </ScrollArea>
+          <TablePagination
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            label="aprovações"
+          />
         </Card>
 
 
