@@ -18,6 +18,7 @@ import {
   type PipedriveFieldTarget,
   type PipedrivePushConfig,
 } from "@/hooks/usePipedrivePush";
+import { PipedriveInboundTab } from "@/components/PipedriveInboundTab";
 
 const NONE = "__none__";
 
@@ -64,6 +65,7 @@ export function PipedriveDialog({ open, onOpenChange }: { open: boolean; onOpenC
 
   const onSave = () =>
     save.mutate({
+      ...saved,
       push_enabled: enabled,
       pipeline_id: pipelineId,
       stage_created: stages.stage_created,
@@ -129,9 +131,10 @@ export function PipedriveDialog({ open, onOpenChange }: { open: boolean; onOpenC
             </div>
 
             <Tabs defaultValue="push">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="push">Envio de negócios</TabsTrigger>
-                <TabsTrigger value="import">Importação de contatos</TabsTrigger>
+                <TabsTrigger value="inbound">Entrada (Inbound)</TabsTrigger>
+                <TabsTrigger value="import">Importar contatos</TabsTrigger>
               </TabsList>
 
               <TabsContent value="import" className="space-y-3 pt-3">
@@ -260,6 +263,10 @@ export function PipedriveDialog({ open, onOpenChange }: { open: boolean; onOpenC
                 <Button className="w-full" onClick={onSave} disabled={!canSave || save.isPending}>
                   {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Salvar
                 </Button>
+              </TabsContent>
+
+              <TabsContent value="inbound" className="pt-3">
+                <PipedriveInboundTab saved={saved} />
               </TabsContent>
             </Tabs>
           </>

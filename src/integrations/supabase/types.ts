@@ -3200,39 +3200,51 @@ export type Database = {
       }
       pipedrive_deals: {
         Row: {
+          activities_synced_at: string | null
           company_id: string
           created_at: string
           current_stage: string | null
           deal_id: number
           id: string
           lead_id: string
+          meeting_activity_id: number | null
+          meeting_booking_id: string | null
           org_id: number | null
           person_id: number | null
           stage_rank: number
+          summary_note_id: number | null
           updated_at: string
         }
         Insert: {
+          activities_synced_at?: string | null
           company_id: string
           created_at?: string
           current_stage?: string | null
           deal_id: number
           id?: string
           lead_id: string
+          meeting_activity_id?: number | null
+          meeting_booking_id?: string | null
           org_id?: number | null
           person_id?: number | null
           stage_rank?: number
+          summary_note_id?: number | null
           updated_at?: string
         }
         Update: {
+          activities_synced_at?: string | null
           company_id?: string
           created_at?: string
           current_stage?: string | null
           deal_id?: number
           id?: string
           lead_id?: string
+          meeting_activity_id?: number | null
+          meeting_booking_id?: string | null
           org_id?: number | null
           person_id?: number | null
           stage_rank?: number
+          summary_note_id?: number | null
           updated_at?: string
         }
         Relationships: [
