@@ -4147,6 +4147,14 @@ export type Database = {
         Returns: boolean
       }
       is_lead_protected: { Args: { _lead_id: string }; Returns: boolean }
+      lead_org_city: {
+        Args: { _city: string; _company: string }
+        Returns: string
+      }
+      lead_org_state: {
+        Args: { _email: string; _state: string }
+        Returns: string
+      }
       lead_protection: {
         Args: { _lead_id: string }
         Returns: {
