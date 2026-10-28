@@ -18,6 +18,14 @@ Fila de mensagens que a IA gerou mas está segurando para revisão humana. Apare
    - **Rejeitar** → mensagem descartada, cadência pula para o próximo passo.
 3. Existe também "Aprovar todas" para acelerar.
 
+## Histórico de aprovações
+
+A aba **Histórico** mostra só o que já foi processado (pendentes ficam apenas na fila).
+
+- **Filtro de data:** De/Até ou atalhos Últimos 7 dias, Últimos 30 dias, Este mês e Todo o período.
+- **Filtro de status:** Todos os processados, Aprovadas, Editadas e enviadas, Rejeitadas, Falhas de envio e Expiradas.
+- **Páginas de 50 itens**, com o total exato. Nada é apagado — todo o histórico continua disponível.
+
 ## Dicas
 
 - Nos **primeiros dias** aprove tudo manualmente para calibrar tom da IA.
