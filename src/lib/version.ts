@@ -4,4 +4,4 @@
 //    como 1 bump.
 //  - A versão NUNCA chega em 1.0. Segue sempre como "beta 0.X", incluindo
 //    valores maiores que 9 (0.9 → 0.10 → 0.11 …), sem transição para 1.x.
-export const APP_VERSION = "beta 0.99.1";
+export const APP_VERSION = "beta 0.99.2";
