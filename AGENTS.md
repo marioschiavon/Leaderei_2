@@ -5,3 +5,4 @@
 - Server-boundary tests live in root `tests/` and are included by Vitest outside the frontend TypeScript source tree, preventing Deno dependencies from entering browser compilation.
 - CRM integrations (Bitrix24, Pipedrive) push one-way Leaderei → CRM through DB triggers that only enqueue plus a cron worker with stage_rank no-regression; Pipedrive contact import stays manual-only — avoids sync loops and keeps the CRM card from moving backwards.
 - Cadence decisions, first-message generation, previews and reply suggestions use the shared AI dispatcher; only exhausted-credit HTTP 402 activates configured master contingency keys, never provider denials — preserves request contracts without bypassing access restrictions.
+- Every shipped change updates docs in the same turn: daily patch log + index in docs/patch-logs/README.md and the affected docs/manual page — keeps technical docs always current.
