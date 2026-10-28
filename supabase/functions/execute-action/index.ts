@@ -1,10 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { getZApiConfig, sendWhatsAppViaZApi } from "../_shared/hook7-whatsapp.ts";
+import { getZApiConfig, sendWhatsAppViaZApi, checkPhonesOnWhatsApp, getHook7SendInstance } from "../_shared/hook7-whatsapp.ts";
 import { enqueueWhatsAppSend } from "../_shared/whatsapp-pacer.ts";
 import { shouldGate, createApprovalRequest, isLeadUnderHumanTakeover } from "../_shared/hitl-gate.ts";
 import { getEmailReplyContext } from "../_shared/email-thread.ts";
-import { normalizePhoneBR } from "../_shared/phone-br.ts";
+import { normalizePhoneBR, toWhatsAppDigits } from "../_shared/phone-br.ts";
 import { buildOutreach, sendOrGate } from "../_shared/shared-contact.ts";
 
 const corsHeaders = {
@@ -687,7 +687,33 @@ const HANDLERS: Record<string, (ctx: ActionContext) => Promise<any>> = {
           ? await ctx.supabase.from("hook7_instances").select("id").eq("company_id", ctx.company_id)
               .eq("status", "connected").is("archived_at", null).limit(1).maybeSingle()
           : { data: null } as any;
+        // Verifica se o telefone indicado tem WhatsApp antes de abordar.
+        // Resultado desconhecido (erro) mantém o comportamento anterior.
+        let hasWhats: boolean | null = null;
         if (phone && inst) {
+          try {
+            const sendInst = await getHook7SendInstance(ctx.supabase, ctx.company_id);
+            const d = toWhatsAppDigits(phone);
+            if (sendInst && d) {
+              const r = await checkPhonesOnWhatsApp(ctx.supabase, sendInst, [d]);
+              const v = r.ok ? r.results.get(d) : undefined;
+              if (typeof v === "boolean") {
+                hasWhats = v;
+                await ctx.supabase.from("leads").update({
+                  whatsapp_valid: v, whatsapp_checked_at: new Date().toISOString(), whatsapp_check_error: null,
+                  ...(v ? {} : { preferred_channel: email ? "email" : "phone" }),
+                } as any).eq("id", newLead.id);
+              }
+            }
+          } catch (e) {
+            console.error("[create_new_contact] whatsapp check failed:", e);
+          }
+          if (hasWhats === false) {
+            await logActivity(ctx, "note", `📵 Telefone do indicado ${finalName} não tem WhatsApp${email ? " — abordagem segue por e-mail" : " — sem canal digital para abordar"}`, { new_lead_id: newLead.id });
+            if (!email) { outreachDone = true; outreachResult = "sem WhatsApp e sem e-mail"; }
+          }
+        }
+        if (phone && inst && hasWhats !== false) {
           await ctx.supabase.from("leads").update({ whatsapp: phone, preferred_channel: "whatsapp" } as any).eq("id", newLead.id);
           const { data: conv } = await ctx.supabase.from("conversations")
             .insert({ company_id: ctx.company_id, lead_id: newLead.id, channel: "whatsapp" } as any).select("id").single();

@@ -6,7 +6,7 @@ Cada arquivo cobre um dia e segue o mesmo formato: **Novidades**, **Melhorias** 
 
 ## Índice
 
-- [28/10/2026](./2026-10-28.md) — beta 0.99.1 (+ documentação atualizada)
+- [28/10/2026](./2026-10-28.md) — beta 0.99.1–0.99.2 (+ documentação; indicações verificam WhatsApp)
 - [27/10/2026](./2026-10-27.md) — beta 0.99
 - [26/10/2026 (b)](./2026-10-26b.md) — beta 0.98
 - [26/10/2026](./2026-10-26.md) — beta 0.96
